@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SIL Loop R — Aprendizajes que pasan por revisión</title>
+<meta name="description" content="Framework local con CLI y skill para registrar fallos, aprobar aprendizajes en lote y revisar reglas posiblemente obsoletas. Python, sin APIs.">
+<link rel="canonical" href="https://inematds.github.io/sil-loop-r/guia/es/">
+<link rel="alternate" hreflang="pt-BR" href="https://inematds.github.io/sil-loop-r/guia/">
+<link rel="alternate" hreflang="en" href="https://inematds.github.io/sil-loop-r/guia/en/">
+<link rel="alternate" hreflang="es" href="https://inematds.github.io/sil-loop-r/guia/es/">
+<style>
+  :root{
+    --bg:#0c0c10; --bg2:#14141b; --card:#16161e; --line:#272730;
+    --txt:#e9e9ee; --mut:#9a9aa6; --amb:#E2A23B; --amb2:#f0c070; --sky:#38bdf8; --pro:#cbd5e1;
+    color-scheme:dark;
+  }
+  body.light{
+    --bg:#f6f7f9; --bg2:#eceef2; --card:#ffffff; --line:#e1e3ea;
+    --txt:#1a1a22; --mut:#5b5b68; --amb:#b9791d; --amb2:#a16207; --sky:#0369a1; --pro:#b45309;
+    color-scheme:light;
+  }
+  body.light .hero .glow{opacity:.5}
+  body.light pre{background:#0e0e14;color:#d6d6e0}
+  body.light pre .c{color:#8a8a98}
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.65 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{font-family:Sora,sans-serif;line-height:1.15;margin:0}
+  a{color:var(--amb);text-decoration:none}
+  code,pre{font-family:"JetBrains Mono",monospace}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 22px}
+  .mut{color:var(--mut)} .amb{color:var(--amb)}
+  .chip{display:inline-block;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--amb);font-weight:600;font-family:Sora,system-ui,sans-serif}
+  nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(12px);background:rgba(12,12,16,.78);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;align-items:center;gap:22px;height:60px}
+  nav .brand{display:flex;align-items:center;gap:8px;font-family:Sora,system-ui,sans-serif;font-weight:800;letter-spacing:-.02em;color:var(--amb)}
+  nav .brand .emoji{font-size:1.25rem}
+  nav .sep{color:var(--mut);opacity:.45}
+  nav .inema{color:var(--sky);font-weight:600;font-size:.88rem;font-family:Sora,system-ui,sans-serif}
+  nav .inema:hover{filter:brightness(1.15)}
+  nav .pro{color:var(--pro);font-weight:600;font-size:.88rem;font-family:Sora,system-ui,sans-serif}
+  nav .pro:hover{filter:brightness(1.15)}
+  nav .clubpro{display:inline-flex;align-items:center;gap:6px}
+  nav .links{margin-left:auto;display:flex;align-items:center;gap:20px;font-size:.92rem}
+  nav .links a.sec{color:var(--mut)} nav .links a.sec:hover{color:var(--txt)}
+  .lang{display:inline-flex;gap:2px;font-family:Sora,system-ui,sans-serif;font-size:.78rem}
+  .lang a{color:var(--mut);padding:.2em .45em;border-radius:6px} .lang a.on{color:var(--amb);background:rgba(226,162,59,.12)}
+  .tgl{background:var(--bg2);border:1px solid var(--line);color:var(--txt);width:38px;height:38px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem}
+  .tgl:hover{border-color:var(--amb)}
+  .btn{display:inline-block;background:var(--amb);color:#1a1206;font-weight:600;padding:.6em 1.05em;border-radius:10px;font-family:Sora,system-ui,sans-serif}
+  .btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
+  @media(max-width:760px){nav .links a.sec{display:none}}
+  @media(max-width:520px){nav .wrap{gap:8px;padding:8px 14px;height:auto;flex-wrap:wrap} nav .links{gap:8px;margin-left:0;width:100%;justify-content:space-between} nav .btn{padding:.45em .7em;font-size:.82rem} .tgl{width:34px;height:34px}}
+  .hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
+  .hero .glow{position:absolute;inset:-40% -20% auto auto;width:70%;height:600px;background:radial-gradient(closest-side,rgba(226,162,59,.22),transparent 70%);pointer-events:none}
+  .hero .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;padding:74px 22px}
+  .hero h1{font-size:clamp(2.2rem,5vw,3.5rem);font-weight:800;letter-spacing:-.025em}
+  .hero p.lead{font-size:1.18rem;color:var(--mut);margin:1.1em 0 1.6em;max-width:34ch}
+  .hero .cta{display:flex;gap:12px;flex-wrap:wrap}
+  .hero figure{margin:0;border-radius:16px;overflow:hidden;border:1px solid var(--line);box-shadow:0 30px 80px -30px #000}
+  .hero figure img{width:100%;display:block}
+  @media(max-width:780px){.hero .wrap{grid-template-columns:1fr;padding:48px 22px}}
+  section{padding:62px 0;border-bottom:1px solid var(--line)}
+  section h2{font-size:clamp(1.5rem,3.4vw,2.1rem);font-weight:800;letter-spacing:-.02em}
+  section .sub{color:var(--mut);margin:.6em 0 2em;max-width:62ch}
+  .grid{display:grid;gap:16px}
+  .g3{grid-template-columns:repeat(3,1fr)} .g4{grid-template-columns:repeat(4,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:820px){.g3,.g4{grid-template-columns:1fr 1fr}}
+  @media(max-width:540px){.g2,.g3,.g4{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .card h3{font-size:1.05rem;margin-bottom:.4em}
+  .card p{color:var(--mut);font-size:.92rem;margin:0}
+  .num{display:inline-flex;width:30px;height:30px;align-items:center;justify-content:center;border-radius:8px;background:rgba(226,162,59,.14);color:var(--amb);font-family:Sora,system-ui,sans-serif;font-weight:800;font-size:.9rem;margin-bottom:.7em}
+  .flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+  .flow span{background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:.45em .9em;font-size:.85rem;font-family:Sora,system-ui,sans-serif;font-weight:600}
+  .flow .arr{color:var(--amb);border:none;background:none;padding:0 .1em}
+  pre{background:#0a0a0e;border:1px solid var(--line);border-radius:12px;padding:16px 18px;overflow:auto;font-size:.86rem;line-height:1.6;color:#d6d6e0}
+  pre .c{color:#6f6f7c} pre .k{color:var(--amb2)} pre .s{color:#9ece6a}
+  .step{display:grid;grid-template-columns:46px minmax(0,1fr);gap:16px;margin-bottom:26px}
+  .step>div,.card{min-width:0}
+  p code,li code,td code{overflow-wrap:anywhere}
+  .step .b{width:46px;height:46px;border-radius:12px;background:var(--amb);color:#1a1206;font-family:Sora,system-ui,sans-serif;font-weight:800;font-size:1.25rem;display:flex;align-items:center;justify-content:center}
+  .step h3{font-size:1.12rem;margin-bottom:.3em}
+  .step p{color:var(--mut);margin:.2em 0 .7em}
+  .ex{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:680px){.ex{grid-template-columns:1fr}}
+  .ex figure{margin:0;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+  .ex figure img{width:100%;display:block}
+  .ex figcaption{padding:12px 14px;font-size:.88rem;color:var(--mut);background:var(--card)}
+  .phase{display:flex;gap:14px;padding:16px 0;border-bottom:1px solid var(--line)}
+  .phase:last-child{border:none}
+  .phase .tag{flex:0 0 92px;font-family:Sora,system-ui,sans-serif;font-weight:800;color:var(--amb)}
+  .phase .d strong{display:block;margin-bottom:.2em}
+  .phase .d span{color:var(--mut);font-size:.92rem}
+  footer{padding:46px 0;text-align:center;color:var(--mut);font-size:.9rem}
+  .pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:.3em .8em;font-size:.78rem;color:var(--mut);margin:0 4px}
+
+:focus-visible{outline:3px solid var(--amb);outline-offset:4px}section{scroll-margin-top:80px}.hero .wrap>*{min-width:0}nav .wrap{gap:12px}nav .links{gap:12px}.hero h1{max-width:15ch} .hero .card p{margin:12px 0}.grid>*{min-width:0}.field{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0}.field input{width:90px;padding:10px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;color:var(--txt);font:inherit}output{display:block;padding:18px 0;font-weight:600;color:var(--amb)}body.light nav{background:var(--bg)}@media(min-width:521px) and (max-width:1000px){nav .wrap{flex-wrap:wrap;height:auto;padding-top:10px;padding-bottom:10px}nav .links{margin-left:0}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style></head><body>
+<nav><div class="wrap"><a class="brand" href="#top">↻ SIL Loop R</a><span class="sep">|</span><span class="clubpro"><a class="inema" href="https://inema.club" target="_blank" rel="noopener">INEMA.CLUB</a><span class="sep">-</span><a class="pro" href="https://inema.pro" target="_blank" rel="noopener">PRO</a></span><div class="links"><a class="sec" href="#fluxo">El ciclo</a><a class="sec" href="#guia">Empezar</a><a class="sec" href="#frequencia">Frecuencia</a><span class="lang"><a href="../" lang="pt-BR">PT</a><a href="../en/" lang="en">EN</a><a class="on" href="./" lang="es">ES</a></span><button class="tgl" id="themeToggle" aria-label="Cambiar tema">☀</button><a class="btn" href="https://github.com/inematds/sil-loop-r">GitHub</a></div></div></nav>
+<main><header class="hero" id="top"><div class="wrap"><div><h1>Transforma fallos en <span class="amb">aprendizajes revisables.</span></h1><p class="lead">Tu agente registra y propone. Tú decides qué permanece. SIL controla plazos, cambios y evidencias.</p><div class="cta"><a class="btn" href="#guia">Probar el kit</a><a class="btn ghost" href="#frequencia">Entender las aprobaciones</a></div></div><aside class="card" aria-label="Política inicial de revisión"><h2>Una regla debe seguir teniendo sentido.</h2><p><strong>7 días · 2 releases · 5 propuestas</strong><br>Uno de estos límites prepara el siguiente lote de aprobación.</p><p><strong>30 días para revisar</strong><br>Los archivos modificados y las reglas sin citas también requieren atención.</p><p>Valores configurables. Ninguna propuesta se aprueba por silencio.</p></aside></div></header>
+<section id="oque"><div class="wrap"><h2>Un kit local, bajo tu control</h2><p class="sub">CLI, skill y plantillas para proyectos que trabajan con agentes de código. Sin servidor, cuenta ni llamadas a APIs.</p><div class="grid g3"><article class="card"><h3>Capturar con evidencia</h3><p>Separa lo ocurrido, la hipótesis de causa y la mejora propuesta. Cada aprendizaje remite a su incidente.</p></article><article class="card"><h3>Decidir en lote</h3><p>Adopta, experimenta, aplaza con fecha o rechaza. La frecuencia es ajustable y cada decisión queda en el historial.</p></article><article class="card"><h3>Reevaluar la validez</h3><p>El tiempo y los cambios señalan posibles reglas obsoletas. Una persona decide mantenerlas, revisarlas o retirarlas.</p></article></div></div></section>
+<section id="fluxo"><div class="wrap"><h2>Del hecho a la regla, con etapas explícitas</h2><p class="sub">El agente puede realizar la captura durante el trabajo autorizado. Convertir una regla en permanente exige una decisión explícita.</p><div class="flow"><span>Incidente</span><span class="arr">→</span><span>Propuesta</span><span class="arr">→</span><span>Decisión</span><span class="arr">→</span><span>Regla</span><span class="arr">→</span><span>Revisión</span></div><p>El framework no entrena modelos ni observa conversaciones por su cuenta. La skill orienta al agente para consultar el contexto al inicio, capturar fallos durante el trabajo y comprobar asuntos pendientes al finalizar.</p></div></section>
+<section id="guia"><div class="wrap"><h2>Prueba antes de integrar</h2><p class="sub">Python 3.10+ y Git son suficientes. La demostración usa un proyecto temporal con registros ficticios identificados y lo elimina al terminar.</p>
+<div class="step"><div class="b">1</div><div><h3>Descarga y ejecuta la demostración</h3><pre>git clone https://github.com/inematds/sil-loop-r.git
+cd sil-loop-r
+python3 scripts/demo.py
+python3 -m unittest discover -s tests -v</pre><p>La demostración recorre la captura, la aprobación ficticia, la revisión y la retirada. No modifica tus otros proyectos.</p></div></div>
+<div class="step"><div class="b">2</div><div><h3>Elige el proyecto que quieres gestionar</h3><p>Sustituye la ruta por el directorio deseado. El comando solo crea el almacenamiento local .sil; no modifica instrucciones ni instala hooks.</p><pre>python3 sil.py --project /caminho/do/projeto init
+python3 sil.py --project /caminho/do/projeto occurrence \
+  --title "La prueba accedió al servicio incorrecto" \
+  --evidence "Registro local: el puerto ya estaba ocupado"
+python3 sil.py --project /caminho/do/projeto lesson \
+  --occurrence O0001 \
+  --proposal "Abortar cuando el puerto esté ocupado" \
+  --scope "Servidor de pruebas"</pre><p>Usa el ID devuelto por el comando anterior. O0001 es solo el primer registro de un proyecto vacío.</p></div></div>
+<div class="step"><div class="b">3</div><div><h3>Consulta el lote y registra una decisión</h3><pre>python3 sil.py --project /caminho/do/projeto status
+python3 sil.py --project /caminho/do/projeto request</pre><p>El agente presenta las propuestas. Ejecuta el siguiente comando solo después de una aprobación explícita para la lección indicada.</p><pre>python3 sil.py --project /caminho/do/projeto decide L0001 adopt \
+  --approved-by "Responsable" \
+  --reason "Aprobado tras revisar la evidencia"</pre><p>También existen reject, defer y trial. El aplazamiento y el experimento requieren una fecha futura; el experimento requiere un criterio verificable. Consulta decide --help.</p></div></div>
+<div class="step"><div class="b">4</div><div><h3>Revisa las reglas a lo largo del tiempo</h3><pre>python3 sil.py --project /caminho/do/projeto context
+python3 sil.py --project /caminho/do/projeto check
+python3 sil.py --project /caminho/do/projeto review R0001 keep \
+  --approved-by "Responsable" \
+  --reason "Protección aún necesaria; evidencia revisada"</pre><p>check devuelve 0 si no hay asuntos pendientes vencidos, 1 cuando hay una decisión o revisión pendiente y 2 en caso de error. Una salida 0 no certifica la veracidad de las reglas.</p></div></div>
+</div></section>
+<section id="frequencia"><div class="wrap"><h2>Elige cuándo hablar sobre aprendizajes</h2><p class="sub">El primer límite alcanzado solicita un lote. La simulación siguiente considera propuestas nuevas, sin recordatorio previo, y no guarda datos ni modifica la configuración.</p><div class="grid g2"><form class="card" id="simulator"><label class="field">Días desde la primera propuesta<input id="days" type="number" min="0" max="999" value="3" required></label><label class="field">Releases desde la propuesta<input id="releases" type="number" min="0" max="999" value="1" required></label><label class="field">Nuevas propuestas pendientes<input id="batch" type="number" min="0" max="999" value="2" required></label><output id="simulation" aria-live="polite"></output></form><div><h3>Configuración real de la CLI</h3><pre>python3 sil.py --project /caminho/do/projeto config \
+  --approval-days 7 \
+  --approval-releases 2 \
+  --approval-batch 5 \
+  --review-days 30 \
+  --uncited-releases 5</pre><p>Un recordatorio no aprueba ni cierra asuntos pendientes. Las fechas vencen el mismo día. Las frecuencias se evalúan al ejecutar la CLI; el kit no instala tareas programadas.</p></div></div></div></section>
+<section id="revisao"><div class="wrap"><h2>Antigua no significa inválida</h2><p class="sub">La falta de citas es una señal para investigar. Las reglas que protegen frente a eventos poco frecuentes pueden seguir siendo necesarias.</p><div class="grid g3"><article class="card"><h3>Plazo alcanzado</h3><p>Las revisiones periódicas preguntan si el problema y el alcance siguen existiendo. Citar una regla no aplaza esta revisión.</p></article><article class="card"><h3>El archivo cambió</h3><p>Usa --watch al proponer una lección. Un cambio de contenido o un archivo ausente señala la necesidad de una nueva evaluación.</p></article><article class="card"><h3>Decisión documentada</h3><p>Mantener, revisar o retirar exige una justificación. El historial se conserva y los cambios invalidan la verificación anterior cuando corresponde.</p></article></div></div></section>
+<section id="skill"><div class="wrap"><h2>Lleva el método a tu agente</h2><p class="sub">La skill se distribuye con el código y puede leerse directamente o instalarse voluntariamente en el asistente elegido. Este proyecto no la instala por ti.</p><a class="btn ghost" href="https://github.com/inematds/sil-loop-r/blob/main/skills/sil-loop-r/SKILL.md">Leer la skill (en portugués)</a><p>El agente captura hechos y prepara decisiones. Tú controlas las reglas permanentes. Los cambios en instrucciones, hooks y código requieren un alcance autorizado.</p></div></section>
+<section id="limites"><div class="wrap"><h2>Qué verifica la primera versión</h2><p>La CLI valida estados y referencias, calcula plazos y compara archivos asociados. La revisión del significado depende de una persona o de un agente que trabaje con evidencias.</p><p>El comando verify guarda resultados de pruebas ya ejecutadas. No ejecuta comandos ni certifica relatos. El nombre de quien aprueba se declara, no se autentica.</p><p>Los datos se guardan en .sil/state.sqlite3. Ignora esa carpeta en el Git del proyecto que lo utiliza y revisa las exportaciones antes de compartirlas. No hay sincronización en la nube, interfaz administrativa ni envío de notificaciones.</p><p><a href="https://github.com/inematds/sil-loop-r/blob/main/docs/architecture.md">Lee la arquitectura y las decisiones (en portugués)</a> · <a href="https://github.com/inematds/sil-loop-r/blob/main/README.es.md">Documentación completa</a></p></div></section>
+</main><footer><div class="wrap"><span class="pill">Python 3.10+</span><span class="pill">SQLite</span><span class="pill">MIT</span><p>SIL Loop R · v1.0.0 · <a href="https://github.com/inematds/sil-loop-r">GitHub</a> · <a href="https://inema.club">INEMA.CLUB</a></p></div></footer>
+<script>
+const themeButton=document.getElementById('themeToggle');
+try{document.body.classList.toggle('light',localStorage.getItem('sil-theme')==='light')}catch{}
+function renderTheme(){themeButton.textContent=document.body.classList.contains('light')?'☾':'☀';themeButton.setAttribute('aria-pressed',String(document.body.classList.contains('light')))}
+renderTheme();themeButton.addEventListener('click',()=>{document.body.classList.toggle('light');try{localStorage.setItem('sil-theme',document.body.classList.contains('light')?'light':'dark')}catch{}renderTheme()});
+const simulator=document.getElementById('simulator');
+function simulate(){const values=['days','releases','batch'].map(id=>Number(document.getElementById(id).value));const output=document.getElementById('simulation');if(!simulator.checkValidity()){output.textContent='Introduce números entre 0 y 999.';return}if(values[2]===0){output.textContent='No hay propuestas nuevas por decidir.';return}output.textContent=values[0]>=7||values[1]>=2||values[2]>=5?'Límite alcanzado: preparar el lote de aprobación.':'Todavía dentro del intervalo: seguir registrando.'}
+simulator.addEventListener('input',simulate);simulator.addEventListener('submit',event=>event.preventDefault());simulate();
+</script></body></html>
