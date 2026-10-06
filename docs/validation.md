@@ -9,4 +9,4 @@ Verificada em 2026-10-05, Python 3.12.3.
 - Navegador Chromium: PT/EN/ES em 360 e 1366 pixels; nenhum erro JavaScript ou transbordamento horizontal. Tema alterna e persiste; links de idiomas respondem; simulador reage a limite e fila vazia.
 - Revisão independente do guia PT: sem bloqueadores materiais.
 
-Limites: a suíte não certifica afirmações registradas como evidência por operadores, nem autentica aprovação humana. Não foi instalado hook, skill ou agendamento no ambiente do autor. Publicação remota depende da criação do repositório e configuração de Pages.
+Limites: a suíte não certifica afirmações registradas como evidência por operadores, nem autentica aprovação humana. Não foi instalado hook, skill ou agendamento no ambiente do autor. Repositório público criado e GitHub Pages configurado via Actions; guias PT/EN/ES responderam HTTP 200. Cadastro enviado aos remotos do portal, buscas e PRO.
