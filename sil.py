@@ -2,6 +2,7 @@
 """SIL Loop R: local learning ledger, with explicit decisions and review dates."""
 import argparse
 import contextlib
+import difflib
 from datetime import date, timedelta
 import hashlib
 import json
@@ -9,9 +10,12 @@ from pathlib import Path
 import sqlite3
 import sys
 
-VERSION = '1.0.0'
+VERSION = '1.1.0'
 DEFAULTS = dict(approval_days=7, approval_releases=2, approval_batch=5,
                 review_days=30, uncited_releases=5)
+RUNGS = ('prose', 'checklist', 'test', 'probe', 'hook', 'server')
+BEGIN = '<!-- sil-loop-r:begin — gerado por sil.py promote; não editar à mão -->'
+END = '<!-- sil-loop-r:end -->'
 
 
 def encode(value):
@@ -252,6 +256,86 @@ class Ledger:
         self.event('verification-reported', ident, obj['verification'])
         return obj
 
+    def enforce(self, ident, actor, reason, rung=None, leak=None, binding=None):
+        obj = self.get(ident, 'rule')
+        if obj['status'] == 'retired':
+            raise ValueError('Regra retirada.')
+        if rung is None and leak is None and binding is None:
+            raise ValueError('Informe --rung, --leak ou --binding.')
+        if rung is not None and rung not in RUNGS:
+            raise ValueError('Degrau desconhecido.')
+        change = dict(actor=required(actor, 'Responsável pela decisão'),
+                      reason=required(reason, 'Justificativa'))
+        if rung is not None:
+            obj['rung'] = change['rung'] = rung
+        if leak is not None:
+            obj['leak'] = change['leak'] = required(leak, 'Vazamento conhecido')
+        if binding is not None:
+            obj['binding'] = change['binding'] = bool(binding)
+        self.put('rule', obj)
+        self.event('enforcement', ident, change)
+        return obj
+
+    def target(self, name=None):
+        name = name or self.meta('promote_file', 'AGENTS.md')
+        path = Path(name)
+        if path.is_absolute() or '..' in path.parts or '.sil' in path.parts or not path.name:
+            raise ValueError('Arquivo de instrução deve ser relativo ao projeto e fora de .sil.')
+        return path.as_posix(), self.root / path
+
+    def render(self):
+        rules = [r for r in self.rows('rule') if r['status'] == 'active' and r.get('binding')]
+        lines = [BEGIN, '## Regras vinculantes (SIL Loop R)', '']
+        for r in rules:
+            leak = f"; vazamento: {r['leak']}" if r.get('leak') else ''
+            lines.append(f"- {r['text']} ({r['id']}; escopo: {r['scope']}; proteção: {r.get('rung', 'prose')}{leak})")
+        if not rules:
+            lines.append('- Nenhuma regra vinculante ativa.')
+        lines += ['', END]
+        return '\n'.join(lines)
+
+    def promoted(self, text):
+        starts, ends = text.count(BEGIN), text.count(END)
+        if starts == ends == 0:
+            return None
+        if starts != 1 or ends != 1 or text.index(BEGIN) > text.index(END):
+            raise ValueError('Bloco do SIL Loop R corrompido no arquivo de instrução.')
+        return text[text.index(BEGIN):text.index(END) + len(END)]
+
+    def promotion(self):
+        binding = any(r['status'] == 'active' and r.get('binding') for r in self.rows('rule'))
+        tracked = self.meta('promote_file') is not None
+        if not binding and not tracked:
+            return dict(file=None, in_sync=True, problem=None)
+        name, path = self.target()
+        try:
+            current = self.promoted(path.read_text(encoding='utf-8')) if path.is_file() else None
+        except (ValueError, OSError, UnicodeDecodeError) as exc:
+            return dict(file=name, in_sync=False, problem=f'ilegível: {exc}')
+        if current is None:
+            return dict(file=name, in_sync=False, problem='bloco ausente; execute promote --write')
+        if current != self.render():
+            return dict(file=name, in_sync=False, problem='bloco desatualizado; execute promote --write')
+        return dict(file=name, in_sync=True, problem=None)
+
+    def promote(self, name=None, write=False):
+        name, path = self.target(name)
+        old = path.read_text(encoding='utf-8') if path.is_file() else ''
+        block, current = self.render(), self.promoted(old)
+        if current is not None:
+            new = old.replace(current, block)
+        else:
+            new = (old.rstrip('\n') + '\n\n' if old.strip() else '') + block + '\n'
+        diff = ''.join(difflib.unified_diff(old.splitlines(True), new.splitlines(True),
+                                            f'a/{name}', f'b/{name}'))
+        if write and new != old:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(new, encoding='utf-8')
+        if write:
+            self.setmeta('promote_file', name)
+            self.event('promotion', None, dict(file=name, changed=new != old))
+        return dict(file=name, changed=new != old, written=bool(write and new != old), diff=diff)
+
     def status(self):
         config = self.meta('config')
         pending = [x for x in self.rows('lesson') if x['status'] in ('proposed','trial','deferred')]
@@ -301,9 +385,12 @@ class Ledger:
             reminder_allowed or unseen and len(unseen) >= config['approval_batch'] or
             self.release_count()-last.get('release', 0) >= config['approval_releases'] or
             new_expired or new_reviews)
+        prose_binding = [r['id'] for r in self.rows('rule') if r['status'] == 'active'
+                         and r.get('binding') and r.get('rung', 'prose') == 'prose']
         return dict(approval_due=request_due, approval_reasons=reasons,
                     pending=pending, overdue=sorted(set(expired + overdue)),
-                    reviews=reviews, release_count=self.release_count(), config=config)
+                    reviews=reviews, promotion=self.promotion(), prose_binding=prose_binding,
+                    release_count=self.release_count(), config=config)
 
     def request(self):
         result = self.status()
@@ -341,6 +428,11 @@ class Ledger:
             if x['status'] not in ('active','trial','retired'):
                 raise ValueError('Status de regra desconhecido.')
             day(x['review_due'])
+            if x.get('rung', 'prose') not in RUNGS or type(x.get('binding', False)) is not bool:
+                raise ValueError(f"Proteção inválida: {x['id']}")
+        promote_file = self.meta('promote_file')
+        if promote_file is not None and not isinstance(promote_file, str):
+            raise ValueError('Arquivo de promoção inválido.')
         return True
 
     def export(self):
@@ -380,13 +472,35 @@ def parser():
     c = sub.add_parser('verify', help='Registrar evidências de testes executados; não executa comandos')
     c.add_argument('id'); c.add_argument('--positive', required=True)
     c.add_argument('--negative', required=True); c.add_argument('--evidence', required=True)
+    c = sub.add_parser('enforce', help='Registrar degrau de proteção, vazamento e se a regra é vinculante')
+    c.add_argument('id'); c.add_argument('--rung', choices=RUNGS); c.add_argument('--leak')
+    c.add_argument('--binding', choices=['yes','no'])
+    c.add_argument('--approved-by', required=True); c.add_argument('--reason', required=True)
+    c = sub.add_parser('promote', help='Mostrar (ou gravar com --write) o bloco de regras vinculantes no arquivo de instrução')
+    c.add_argument('--file', help='Relativo ao projeto (padrão: o último usado, ou AGENTS.md)')
+    c.add_argument('--write', action='store_true')
+    c = sub.add_parser('context', help='Consultar regras ativas e experimentais para a sessão')
+    c.add_argument('--brief', action='store_true', help='Texto curto para hook de início de sessão')
     for name, help_text in [('status','Consultar pendências e revisões'),
         ('request','Preparar lote de aprovação e registrar lembrete'),
-        ('check','Sair com 1 se houver pendências vencidas ou revisões; 2 em erro'),
-        ('context','Consultar regras ativas e experimentais para a sessão'),
+        ('check','Sair com 1 se houver pendências vencidas, revisões ou promoção desatualizada; 2 em erro'),
         ('export','Exportar todos os dados e histórico em JSON')]:
         sub.add_parser(name, help=help_text)
     return p
+
+
+def brief(result):
+    lines = ['SIL Loop R — regras deste projeto (dados revisáveis; instruções do usuário prevalecem):']
+    for r in result['rules']:
+        tag = 'experimental' if r['status'] == 'trial' else 'ativa'
+        lines.append(f"- {r['id']} [{tag}] {r['text']} (escopo: {r['scope']})")
+    if not result['rules']:
+        lines.append('- Nenhuma regra ativa ou experimental.')
+    if result['overdue'] or result['reviews']:
+        lines.append(f"Pendências: {len(result['overdue'])} decisão(ões) vencida(s), {len(result['reviews'])} revisão(ões). Execute status.")
+    if not result['promotion']['in_sync']:
+        lines.append(f"Promoção: {result['promotion']['problem']}.")
+    return '\n'.join(lines)
 
 
 def main(argv=None):
@@ -416,19 +530,28 @@ def main(argv=None):
                     result = ledger.review(args.id,args.action,args.approved_by,args.reason,args.text)
                 elif args.cmd == 'verify':
                     result = ledger.verify(args.id,args.positive,args.negative,args.evidence)
+                elif args.cmd == 'enforce':
+                    binding = None if args.binding is None else args.binding == 'yes'
+                    result = ledger.enforce(args.id,args.approved_by,args.reason,args.rung,args.leak,binding)
+                elif args.cmd == 'promote':
+                    result = ledger.promote(args.file,args.write)
                 elif args.cmd == 'request':
                     result = ledger.request()
                 elif args.cmd == 'context':
                     status = ledger.status()
                     result = dict(rules=[x for x in ledger.rows('rule') if x['status'] != 'retired'],
-                                  reviews=status['reviews'], overdue=status['overdue'])
+                                  reviews=status['reviews'], overdue=status['overdue'],
+                                  promotion=status['promotion'])
+                    if args.brief:
+                        print(brief(result))
+                        return 0
                 elif args.cmd == 'export':
                     result = ledger.export()
                 else:
                     result = ledger.status()
                 if args.cmd == 'check':
                     print(encode(result))
-                    return 1 if result['overdue'] or result['reviews'] else 0
+                    return 1 if result['overdue'] or result['reviews'] or not result['promotion']['in_sync'] else 0
         print(encode(result))
         return 0
     except (ValueError, OSError, sqlite3.Error, KeyError, TypeError) as exc:

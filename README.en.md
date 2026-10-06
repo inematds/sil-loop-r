@@ -12,6 +12,7 @@ A local framework for turning occurrences into lessons you can review: record ev
 - Occurrences, proposals, time-limited experiments, and permanent rules requiring an explicit decision.
 - Approval requests triggered by days, releases, or the number of proposals.
 - Review triggered by age, missing citations, and changes to associated files.
+- Promotion of binding rules into a delimited block in AGENTS.md (or another instruction file), watched by `check`; protection rung and known leak per rule (v1.1).
 - Decision and evidence history, transactional SQLite storage, and JSON export.
 - Skill and templates distributed in the repository, without automatic installation.
 
@@ -86,7 +87,25 @@ python3 sil.py --project /caminho/do/projeto review R0001 keep \
 
 Read or optionally install [skills/sil-loop-r/SKILL.md (in Portuguese)](skills/sil-loop-r/SKILL.md) in your assistant. At the start, it checks `context`; during work, it records occurrences and proposes lessons; before finishing, it checks `status` and presents overdue approvals. The framework does not monitor conversations on its own or train models.
 
-Rules do not automatically change AGENTS.md, CLAUDE.md, code, hooks, or CI. These integrations require an explicit choice by the person using the project. A new rule cannot override the user’s higher-priority instructions.
+Rules do not change code, hooks, or CI. The instruction file only changes when you run `promote --write` (next section). A new rule cannot override the user’s higher-priority instructions.
+
+## Promotion: the rule reaches the next session
+
+A rule stored only in the database is not read by a new session. For each active rule, ask: *would breaking this rule in a session that never consults SIL cause real harm?* If yes, mark it as binding. Also record its protection rung (`prose`, `checklist`, `test`, `probe`, `hook`, `server`) and how it can be bypassed.
+
+```bash
+python3 sil.py --project /path/to/project enforce R0001 \
+  --binding yes --rung hook --leak "git push --no-verify" \
+  --approved-by "Owner" --reason "A wrong deploy breaks the app"
+python3 sil.py --project /path/to/project promote          # shows the diff, writes nothing
+python3 sil.py --project /path/to/project promote --write  # writes the block to AGENTS.md
+```
+
+The block sits between `<!-- sil-loop-r:begin … -->` and `<!-- sil-loop-r:end -->`; the rest of the file is preserved. Use `--file CLAUDE.md` (or another relative path) if you prefer; the last file written becomes the default. In Claude Code, a `CLAUDE.md` whose first line is `@AGENTS.md` loads the same block.
+
+Once there is a binding rule, `check` returns 1 while the block is missing, outdated (rule revised, retired, or unbound) or corrupted, and when the file cannot be read. `status` lists in `prose_binding` the binding rules that still rely on text alone: candidates to climb a rung.
+
+Optional, never installed automatically: `context --brief` prints a short summary for your agent’s session-start hook.
 
 ## Data and limits
 
@@ -98,7 +117,7 @@ python3 sil.py --project /caminho/do/projeto export > historico-sil.json
 
 Review the export before sharing. For a restorable backup, copy `.sil/state.sqlite3` while the CLI is stopped. JSON is an audit export; import and merging are not yet available. SQLite serializes local writes, but does not provide synchronization across machines or multiuser authentication.
 
-`check` exit codes: **0** means no overdue items or flagged reviews; **1** requires a decision or review; **2** indicates a storage, input, or configuration error. The CLI does not install publication blockers. Frequencies are evaluated when someone runs the commands; no daemon or scheduled task is installed.
+`check` exit codes: **0** means no overdue items, flagged reviews, or outdated promotion; **1** requires a decision, a review, or `promote --write`; **2** indicates a storage, input, or configuration error. The CLI does not install publication blockers. Frequencies are evaluated when someone runs the commands; no daemon or scheduled task is installed.
 
 ## License
 

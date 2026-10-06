@@ -12,6 +12,7 @@ Framework local para transformar incidentes en aprendizajes revisables: registra
 - Incidentes, propuestas, experimentos con plazo y reglas permanentes con decisión explícita.
 - Solicitud de aprobación por frecuencia en días, releases o cantidad de propuestas.
 - Revisión por antigüedad, ausencia de citas y cambios en archivos asociados.
+- Promoción de las reglas vinculantes a un bloque delimitado en AGENTS.md (u otro archivo de instrucciones), vigilada por `check`; peldaño de protección y fuga conocida por regla (v1.1).
 - Historial de decisiones y evidencias, almacenamiento SQLite transaccional y exportación JSON.
 - Skill y plantillas distribuidas en el repositorio, sin instalación automática.
 
@@ -86,7 +87,25 @@ python3 sil.py --project /caminho/do/projeto review R0001 keep \
 
 Lee o instala voluntariamente [skills/sil-loop-r/SKILL.md (en portugués)](skills/sil-loop-r/SKILL.md) en tu asistente. Al inicio, consulta `context`; durante el trabajo, registra incidentes y propone lecciones; al finalizar, consulta `status` y presenta las aprobaciones vencidas. El framework no observa conversaciones por su cuenta ni entrena modelos.
 
-Las reglas no modifican automáticamente AGENTS.md, CLAUDE.md, código, hooks ni CI. Estas integraciones requieren una elección explícita de quien utiliza el proyecto. Una regla nueva no puede sustituir las instrucciones de mayor prioridad del usuario.
+Las reglas no modifican código, hooks ni CI. El archivo de instrucciones solo cambia cuando ejecutas `promote --write` (sección siguiente). Una regla nueva no puede sustituir las instrucciones de mayor prioridad del usuario.
+
+## Promoción: la regla llega a la próxima sesión
+
+Una regla guardada solo en la base de datos no la lee una sesión nueva. Para cada regla activa, pregunta: *¿romper esta regla en una sesión que nunca consulta SIL causa un daño real?* Si es así, márcala como vinculante. Registra también su peldaño de protección (`prose`, `checklist`, `test`, `probe`, `hook`, `server`) y cómo puede eludirse.
+
+```bash
+python3 sil.py --project /ruta/del/proyecto enforce R0001 \
+  --binding yes --rung hook --leak "git push --no-verify" \
+  --approved-by "Responsable" --reason "Un deploy equivocado rompe la app"
+python3 sil.py --project /ruta/del/proyecto promote          # muestra el diff, no escribe
+python3 sil.py --project /ruta/del/proyecto promote --write  # escribe el bloque en AGENTS.md
+```
+
+El bloque queda entre `<!-- sil-loop-r:begin … -->` y `<!-- sil-loop-r:end -->`; el resto del archivo se conserva. Usa `--file CLAUDE.md` (u otra ruta relativa) si prefieres; el último archivo escrito pasa a ser el predeterminado. En Claude Code, un `CLAUDE.md` cuya primera línea es `@AGENTS.md` carga el mismo bloque.
+
+Desde la primera regla vinculante, `check` devuelve 1 mientras el bloque falte, esté desactualizado (regla revisada, retirada o desvinculada) o corrupto, y cuando el archivo no puede leerse. `status` enumera en `prose_binding` las reglas vinculantes que aún dependen solo de texto: candidatas a subir un peldaño.
+
+Opcional, nunca se instala automáticamente: `context --brief` imprime un resumen corto para el hook de inicio de sesión de tu agente.
 
 ## Datos y límites
 
@@ -98,7 +117,7 @@ python3 sil.py --project /caminho/do/projeto export > historico-sil.json
 
 Revisa la exportación antes de compartirla. Para una copia de seguridad restaurable, copia `.sil/state.sqlite3` con la CLI detenida. JSON es una exportación de auditoría; todavía no existe importación ni combinación de datos. SQLite serializa las escrituras locales, pero no ofrece sincronización entre máquinas ni autenticación multiusuario.
 
-Salidas de `check`: **0** sin asuntos pendientes vencidos ni revisiones señaladas; **1** requiere decisión o revisión; **2** error de almacenamiento, entrada o configuración. La CLI no instala bloqueos de publicación. Las frecuencias se evalúan cuando alguien ejecuta los comandos; no existe un daemon ni una programación instalada.
+Salidas de `check`: **0** sin asuntos pendientes vencidos, revisiones señaladas ni promoción desactualizada; **1** requiere decisión, revisión o `promote --write`; **2** error de almacenamiento, entrada o configuración. La CLI no instala bloqueos de publicación. Las frecuencias se evalúan cuando alguien ejecuta los comandos; no existe un daemon ni una programación instalada.
 
 ## Licencia
 

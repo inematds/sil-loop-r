@@ -12,6 +12,7 @@ Framework local para transformar ocorrências em aprendizados revisáveis: regis
 - Ocorrências, propostas, experimentos com prazo e regras permanentes com decisão explícita.
 - Solicitação de aprovação por frequência em dias, releases ou quantidade de propostas.
 - Revisão por idade, ausência de citações e mudança de arquivos associados.
+- Promoção das regras vinculantes para um bloco delimitado no AGENTS.md (ou outro arquivo de instrução), vigiada pelo `check`; degrau de proteção e vazamento conhecido por regra (v1.1).
 - Histórico de decisões e evidências, armazenamento SQLite transacional e exportação JSON.
 - Skill e templates distribuídos no repositório, sem instalação automática.
 
@@ -86,7 +87,25 @@ python3 sil.py --project /caminho/do/projeto review R0001 keep \
 
 Leia ou instale voluntariamente [skills/sil-loop-r/SKILL.md](skills/sil-loop-r/SKILL.md) no seu assistente. No começo, ele consulta `context`; durante o trabalho, registra ocorrências e propõe lições; no fechamento, consulta `status` e apresenta aprovações vencidas. O framework não observa conversas por conta própria nem treina modelos.
 
-Regras não alteram automaticamente AGENTS.md, CLAUDE.md, código, hooks ou CI. Essas integrações exigem uma escolha explícita de quem usa o projeto. Uma regra nova não pode substituir as instruções de maior prioridade do usuário.
+Regras não alteram código, hooks ou CI. O arquivo de instrução só muda quando você executa `promote --write` (próxima seção). Uma regra nova não pode substituir as instruções de maior prioridade do usuário.
+
+## Promoção: a regra chega à próxima sessão
+
+Uma regra guardada só no banco não é lida por uma sessão nova. Para cada regra ativa, responda: *quebrar esta regra numa sessão que nunca consulta o SIL causa dano real?* Se sim, marque-a como vinculante. Registre também o degrau de proteção (`prose`, `checklist`, `test`, `probe`, `hook`, `server`) e como ela pode ser contornada.
+
+```bash
+python3 sil.py --project /caminho/do/projeto enforce R0001 \
+  --binding yes --rung hook --leak "git push --no-verify" \
+  --approved-by "Responsável" --reason "Deploy errado derruba o app"
+python3 sil.py --project /caminho/do/projeto promote          # mostra o diff, não grava
+python3 sil.py --project /caminho/do/projeto promote --write  # grava o bloco no AGENTS.md
+```
+
+O bloco fica entre `<!-- sil-loop-r:begin … -->` e `<!-- sil-loop-r:end -->`; o resto do arquivo é preservado. Use `--file CLAUDE.md` (ou outro caminho relativo) se preferir; o último arquivo gravado passa a ser o padrão. No Claude Code, um `CLAUDE.md` cuja primeira linha é `@AGENTS.md` carrega o mesmo bloco.
+
+Depois da primeira regra vinculante, `check` retorna 1 enquanto o bloco estiver ausente, desatualizado (regra revisada, retirada ou desvinculada) ou corrompido, e quando o arquivo não pode ser lido. `status` lista em `prose_binding` as regras vinculantes que ainda dependem só de texto: candidatas a subir um degrau.
+
+Opcional, sem instalação automática: `context --brief` imprime um resumo curto para um hook de início de sessão do seu agente.
 
 ## Dados e limites
 
@@ -98,7 +117,7 @@ python3 sil.py --project /caminho/do/projeto export > historico-sil.json
 
 Revise a exportação antes de compartilhar. Para backup restaurável, copie `.sil/state.sqlite3` com a CLI parada. JSON é uma exportação de auditoria; importação/mesclagem ainda não existe. SQLite serializa gravações locais, mas não oferece sincronização entre máquinas ou autenticação multiusuário.
 
-Saídas de `check`: **0** sem pendências vencidas ou revisões sinalizadas; **1** requer decisão/revisão; **2** erro de armazenamento, entrada ou configuração. A CLI não instala bloqueios de publicação. Frequências são avaliadas quando alguém executa os comandos; não existe daemon ou agendamento instalado.
+Saídas de `check`: **0** sem pendências vencidas, revisões sinalizadas ou promoção desatualizada; **1** requer decisão, revisão ou `promote --write`; **2** erro de armazenamento, entrada ou configuração. A CLI não instala bloqueios de publicação. Frequências são avaliadas quando alguém executa os comandos; não existe daemon ou agendamento instalado.
 
 ## Licença
 

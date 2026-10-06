@@ -26,12 +26,21 @@ with tempfile.TemporaryDirectory(prefix='sil-demo-') as folder:
                  '--reason','Illustrative decision in a disposable fixture')
     rule=decision['rule']
     run('check')
+    run('enforce',rule,'--rung','hook','--leak','git push --no-verify','--binding','yes',
+        '--approved-by','Demo fictional reviewer','--reason','Breaking it without the playbook causes harm')
+    assert run('check',expected=1)['promotion']['in_sync'] is False
+    assert run('promote')['written'] is False
+    assert run('promote','--write')['written'] is True
+    assert rule in (Path(folder)/'AGENTS.md').read_text(encoding='utf-8')
+    run('check')
     for name in ['v1','v2','v3','v4','v5']:
         run('release',name,'--evidence','Fictional release for demonstration')
     result=run('check',expected=1)
     assert result['reviews'][0]['id']==rule
     run('review',rule,'retire','--approved-by','Demo fictional reviewer',
         '--reason','Example component removed')
+    run('check',expected=1)
+    run('promote','--write')
     run('check')
     data=run('export')
     assert data['rules'][0]['status']=='retired'

@@ -1,4 +1,15 @@
-# Validação da versão 1.0.0
+# Validação da versão 1.1.0
+
+Verificada em 2026-10-05, Python 3.12.3.
+
+- `python3 -m unittest discover -s tests -v`: 25 testes passaram (16 da 1.0.0 + 9 de promoção).
+- Mutação: remover a condição de promoção do `check` derruba 2 testes; ignorar divergência do bloco derruba 3.
+- `python3 scripts/demo.py`: PASS, 15 eventos em projeto temporário (inclui enforce, promote e check acusando bloco desatualizado após retirada).
+- `python3 scripts/check_site.py`: PT/EN/ES com estrutura e links internos válidos.
+- Validador de skill: skill válida.
+- Navegador Chromium (servidor HTTP local): PT/EN/ES em 360 e 1366 pixels, sem erro JavaScript nem transbordamento horizontal; fluxo mostra a etapa Promoção.
+
+## Validação da versão 1.0.0
 
 Verificada em 2026-10-05, Python 3.12.3.
 

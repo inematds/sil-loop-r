@@ -39,6 +39,17 @@ Evidências são referências textuais fornecidas pelo operador. `verify` não e
 
 Não há interface administrativa, sincronização em nuvem, notificações, chamadas de modelos ou daemon. Hooks e CI podem chamar `check` quando o consumidor decidir integrar; nenhuma integração é instalada pelo projeto.
 
+## Promoção (v1.1)
+
+Uma regra que vive só no banco depende de a sessão consultar `context`, o que nada garante. A v1.1 fecha essa aresta sem instalar integrações:
+
+- `enforce` registra, com decisão explícita, se a regra é vinculante (pergunta de promoção), o degrau de proteção (`prose` a `server`) e o vazamento conhecido. Regras sem esses campos (v1.0) valem como `prose`, não vinculantes; o formato de armazenamento não mudou.
+- `promote` gera um bloco determinístico com as regras ativas vinculantes. Sem `--write` devolve só o diff. Com `--write`, substitui o bloco entre marcadores ou o acrescenta ao fim, preservando o restante do arquivo, e memoriza o arquivo escolhido (padrão `AGENTS.md`). O caminho é confinado ao projeto e fora de `.sil`.
+- `check` falha fechado: havendo regra vinculante ou arquivo já promovido, retorna 1 se o bloco faltar, divergir do esperado, estiver corrompido (marcadores duplicados ou fora de ordem) ou o arquivo não puder ser lido. Editar o bloco à mão também é acusado.
+- `context --brief` produz texto curto para um hook de início de sessão escolhido pelo consumidor.
+
+Regras experimentais (`trial`) não são promovidas: só entram no arquivo de instrução após adoção.
+
 ## Validação
 
 A suíte cobre ciclo completo, decisões inválidas com rollback, prazos inclusivos, lembretes sem aprovação implícita, lotes, releases no mesmo dia, testes temporários, arquivos ausentes/alterados, regras raras, referências inválidas, armazenamento corrompido e captura concorrente. A demonstração executa comandos reais em um diretório temporário.

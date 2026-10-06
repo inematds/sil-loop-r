@@ -12,7 +12,7 @@ import unittest
 from sil import Ledger, main
 
 
-class LoopTest(unittest.TestCase):
+class Base(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -33,6 +33,9 @@ class LoopTest(unittest.TestCase):
     def adopt(self, watch=()):
         lesson = self.proposal(watch)
         return self.call('decision', lesson['id'], 'adopt', 'Pessoa', 'Decisão explícita')['rule']
+
+
+class LoopTest(Base):
 
     def test_full_cycle_and_history(self):
         rule = self.adopt()
@@ -197,6 +200,118 @@ class LoopTest(unittest.TestCase):
             ids.append(json.loads(out)['id'])
         self.assertEqual(len(set(ids)),8)
         self.assertEqual(len(self.call('rows','occurrence')),8)
+
+
+class PromotionTest(Base):
+    def cli(self, *args):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = main(['--project', str(self.root), *args])
+        return code, out.getvalue()
+
+    def bound(self):
+        rule = self.adopt()
+        self.call('enforce', rule, 'Pessoa', 'quebrar sem o playbook causa dano', 'hook',
+                  'git push --no-verify', True)
+        return rule
+
+    def test_no_binding_rule_needs_no_promotion(self):
+        self.adopt()
+        self.assertTrue(self.call('status')['promotion']['in_sync'])
+        self.assertEqual(self.cli('check')[0], 0)
+        self.assertFalse((self.root/'AGENTS.md').exists())
+
+    def test_binding_rule_blocks_check_until_promoted(self):
+        rule = self.bound()
+        self.assertEqual(self.cli('check')[0], 1)
+        dry = self.call('promote')
+        self.assertTrue(dry['changed'])
+        self.assertIn(rule, dry['diff'])
+        self.assertFalse((self.root/'AGENTS.md').exists())
+        self.call('promote', None, True)
+        text = (self.root/'AGENTS.md').read_text()
+        self.assertIn(f'{rule}; escopo: testes HTTP; proteção: hook; vazamento: git push --no-verify', text)
+        self.assertEqual(self.cli('check')[0], 0)
+        self.assertFalse(self.call('promote', None, True)['changed'])
+
+    def test_promote_preserves_existing_instructions(self):
+        (self.root/'AGENTS.md').write_text('# Projeto\n\nInstrução existente.\n')
+        self.bound()
+        self.call('promote', None, True)
+        text = (self.root/'AGENTS.md').read_text()
+        self.assertTrue(text.startswith('# Projeto\n\nInstrução existente.\n\n'))
+        self.call('review', 'R0001', 'revise', 'Pessoa', 'texto melhor', 'Validar a porta antes do servidor')
+        self.assertFalse(self.call('status')['promotion']['in_sync'])
+        self.call('promote', None, True)
+        text = (self.root/'AGENTS.md').read_text()
+        self.assertIn('Validar a porta antes do servidor', text)
+        self.assertNotIn('Abortar se porta ocupada', text)
+        self.assertEqual(text.count('sil-loop-r:begin'), 1)
+        self.assertIn('Instrução existente.', text)
+
+    def test_mutation_edited_or_broken_block_fails_closed(self):
+        self.bound()
+        self.call('promote', None, True)
+        path = self.root/'AGENTS.md'
+        good = path.read_text()
+        path.write_text(good.replace('proteção: hook', 'proteção: prose'))
+        self.assertEqual(self.cli('check')[0], 1)
+        path.write_text(good.replace('<!-- sil-loop-r:end -->', ''))
+        self.assertIn('corrompido', self.call('status')['promotion']['problem'])
+        self.assertEqual(self.cli('check')[0], 1)
+        with self.assertRaises(ValueError): self.call('promote', None, True)
+        path.unlink()
+        self.assertEqual(self.cli('check')[0], 1)
+        path.write_text(good)
+        self.assertEqual(self.cli('check')[0], 0)
+
+    def test_retired_and_unbound_rules_leave_block(self):
+        rule = self.bound()
+        self.call('promote', None, True)
+        self.call('enforce', rule, 'Pessoa', 'não precisa estar em toda sessão', None, None, False)
+        self.assertFalse(self.call('status')['promotion']['in_sync'])
+        self.call('promote', None, True)
+        text = (self.root/'AGENTS.md').read_text()
+        self.assertIn('Nenhuma regra vinculante ativa', text)
+        self.assertEqual(self.cli('check')[0], 0)
+
+    def test_custom_file_is_remembered_and_paths_are_confined(self):
+        self.bound()
+        self.call('promote', 'docs/AGENTS.md', True)
+        self.assertTrue((self.root/'docs/AGENTS.md').is_file())
+        self.assertEqual(self.call('status')['promotion']['file'], 'docs/AGENTS.md')
+        self.assertEqual(self.cli('check')[0], 0)
+        for bad in ('../fora.md', '/tmp/x.md', '.sil/x.md'):
+            with self.assertRaises(ValueError): self.call('promote', bad, True)
+
+    def test_enforce_validation_and_prose_warning(self):
+        rule = self.adopt()
+        with self.assertRaises(ValueError): self.call('enforce', rule, 'Pessoa', 'motivo')
+        with self.assertRaises(ValueError): self.call('enforce', rule, 'Pessoa', 'motivo', 'magia')
+        with self.assertRaises(ValueError): self.call('enforce', rule, '', 'motivo', 'hook')
+        self.call('enforce', rule, 'Pessoa', 'vincula', None, None, True)
+        self.assertEqual(self.call('status')['prose_binding'], [rule])
+        self.call('enforce', rule, 'Pessoa', 'subiu um degrau', 'probe')
+        self.assertEqual(self.call('status')['prose_binding'], [])
+        self.call('review', rule, 'retire', 'Pessoa', 'removido')
+        with self.assertRaises(ValueError): self.call('enforce', rule, 'Pessoa', 'motivo', 'hook')
+        self.assertIn('enforcement', [e['action'] for e in self.call('export')['events']])
+
+    def test_brief_context_for_session_hook(self):
+        self.bound()
+        code, out = self.cli('context', '--brief')
+        self.assertEqual(code, 0)
+        self.assertIn('R0001 [ativa] Abortar se porta ocupada', out)
+        self.assertIn('Promoção: bloco ausente', out)
+
+    def test_v10_storage_without_new_fields_still_works(self):
+        rule = self.adopt()
+        with self.loop.connect():
+            x = self.loop.get(rule)
+            for key in ('rung', 'leak', 'binding'): x.pop(key, None)
+            self.loop.put('rule', x)
+        self.assertEqual(self.cli('check')[0], 0)
+        self.assertEqual(self.call('status')['prose_binding'], [])
 
 
 if __name__ == '__main__': unittest.main()
